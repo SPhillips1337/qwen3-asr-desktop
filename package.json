@@ -1,0 +1,29 @@
+{
+  "name": "qwen3-asr-desktop",
+  "version": "0.1.0",
+  "author": "Stephen Phillips",
+  "license": "MIT",
+  "repository": "https://github.com/SPhillips1337/qwen3-asr-desktop",
+  "description": "Windows tray voice typing frontend for the Qwen3-ASR server",
+  "type": "module",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.js",
+    "smoke": "electron --version",
+    "dist:dir": "electron-builder --win dir --x64"
+  },
+  "dependencies": {
+    "uiohook-napi": "^1.5.5"
+  },
+  "devDependencies": {
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "ai.happymonkey.qwen3asr",
+    "productName": "Qwen3 ASR",
+    "files": ["src/**/*", "package.json"],
+    "win": { "target": ["nsis", "dir"], "signExecutable": false }
+  }
+}

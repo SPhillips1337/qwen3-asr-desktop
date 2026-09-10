@@ -1,0 +1,17 @@
+import { downsample, encodeWav } from "./wav.js";
+const $ = (id) => document.getElementById(id);
+let audioContext; let stream; let processor; let chunks = []; let recording = false;
+function setStatus(text, error = false) { $("status").textContent = text; $("status").className = error ? "status error" : "status"; }
+function fill(settings) { $("server").value = settings.serverUrl; $("shortcut").value = settings.shortcut; $("language").value = settings.language; $("paste").checked = settings.autoPaste; $("startup").checked = settings.startWithWindows; $("key-state").textContent = settings.hasApiKey ? "(saved)" : "(not set)"; }
+async function startAudio() {
+  if (recording) return;
+  try {
+    recording = true; chunks = []; setStatus("Recording… release the shortcut when finished"); $("record").textContent = "Recording…";
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    audioContext = new AudioContext(); const source = audioContext.createMediaStreamSource(stream); processor = audioContext.createScriptProcessor(4096, 1, 1);
+    processor.onaudioprocess = (event) => chunks.push(new Float32Array(event.inputBuffer.getChannelData(0))); source.connect(processor); processor.connect(audioContext.destination);
+  } catch (error) { recording = false; stream?.getTracks().forEach((track) => track.stop()); await audioContext?.close(); $("record").textContent = "Start recording"; setStatus(String(error), true); }
+}
+async function stopAudio() { if (!recording) return; recording = false; processor?.disconnect(); stream?.getTracks().forEach((track) => track.stop()); await audioContext?.close(); const samples = new Float32Array(chunks.reduce((sum, chunk) => sum + chunk.length, 0)); let offset = 0; for (const chunk of chunks) { samples.set(chunk, offset); offset += chunk.length; } const merged = downsample(samples, audioContext?.sampleRate || 48000, 16000); const wav = encodeWav(merged, 16000); $("record").textContent = "Start recording"; setStatus("Transcribing…"); try { const result = await window.qwenAsr.transcribe(wav.buffer); $("transcript").textContent = result.text || "(empty transcript)"; $("transcript").className = "transcript"; setStatus(result.text ? "Transcribed and pasted" : "Transcribed empty audio"); } catch (error) { setStatus(String(error), true); } }
+async function load() { try { const state = await window.qwenAsr.getState(); fill(state.settings); } catch (error) { setStatus(String(error), true); } }
+$("record").addEventListener("click", () => recording ? stopAudio() : startAudio()); $("save").addEventListener("click", async () => { $("message").textContent = ""; try { const saved = await window.qwenAsr.saveSettings({ serverUrl: $("server").value.trim(), shortcut: $("shortcut").value.trim(), language: $("language").value.trim(), autoPaste: $("paste").checked, startWithWindows: $("startup").checked, ...( $("key").value ? { apiKey: $("key").value } : {}) }); fill(saved); $("key").value = ""; setStatus("Settings saved"); } catch (error) { $("message").textContent = String(error); } }); $("health").addEventListener("click", async () => { try { const result = await window.qwenAsr.health(); setStatus(result.ok ? `Server ready: ${result.body.model}` : "Server unavailable", !result.ok); } catch (error) { setStatus(String(error), true); } }); window.qwenAsr.onRecordingStart(() => startAudio()); window.qwenAsr.onRecordingStop(() => stopAudio()); load();
